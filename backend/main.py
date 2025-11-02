@@ -327,8 +327,15 @@ async def api_extract_name_from_cropped(
         saved_path = _save_bytes("name_crop", file.filename, image_bytes)
         result = extract_name_from_image(image_bytes)
         result["image_path"] = saved_path
+        logger.info(f"Name extraction result: student_name={result.get('student_name')}, roll_number={result.get('roll_number')}")
+        # Ensure we return None instead of empty string
+        if result.get("student_name") == "":
+            result["student_name"] = None
+        if result.get("roll_number") == "":
+            result["roll_number"] = None
         return result
     except Exception as e:
+        logger.error(f"Error extracting name: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error extracting name: {str(e)}")
 
 
@@ -340,6 +347,7 @@ async def process_cropped_omr_by_answer_key(
     db: Session = Depends(get_db)
 ):
     """Process already cropped OMR image - no coordinates needed, image is already cropped."""
+    logger.info(f"Received student_name parameter: '{student_name}' (type: {type(student_name)})")
     # Load answer key
     answer_key = db.query(AnswerKey).filter(AnswerKey.id == answer_key_id).first()
     if not answer_key:
@@ -379,9 +387,23 @@ async def process_cropped_omr_by_answer_key(
             wrong_count += 1
 
     percentage = (correct_count / total_questions * 100) if total_questions > 0 else 0
+    
+    # Prioritize passed student_name over result, and handle empty strings
+    final_student_name = None
+    if student_name and isinstance(student_name, str) and student_name.strip():
+        final_student_name = student_name.strip()
+        logger.info(f"Using student_name from parameter: '{final_student_name}'")
+    elif result.get("student_name") and isinstance(result.get("student_name"), str) and result.get("student_name").strip():
+        final_student_name = result.get("student_name").strip()
+        logger.info(f"Using student_name from OMR result: '{final_student_name}'")
+    else:
+        logger.warning(f"No valid student_name found (param: '{student_name}', result: '{result.get('student_name')}')")
+    
+    logger.info(f"Final student_name to save: '{final_student_name}'")
+    
     db_omr_sheet = OMRSheet(
         template_id=template.id,
-        student_name=student_name or result.get("student_name"),
+        student_name=final_student_name,
         roll_number=result.get("roll_number"),
         exam_date=result.get("exam_date"),
         other_details=json.dumps(result.get("other_details", {})),
@@ -488,6 +510,9 @@ def get_omr_sheets(db: Session = Depends(get_db)):
             sheet.total_questions = 0
         if not sheet.percentage:
             sheet.percentage = "0%"
+        # Ensure student_name is properly returned (handle empty strings)
+        if sheet.student_name == "":
+            sheet.student_name = None
     return omr_sheets
 
 
@@ -507,6 +532,9 @@ def get_omr_sheet(sheet_id: int, db: Session = Depends(get_db)):
         sheet.total_questions = 0
     if not sheet.percentage:
         sheet.percentage = "0%"
+    # Ensure student_name is properly returned (handle empty strings)
+    if sheet.student_name == "":
+        sheet.student_name = None
     return sheet
 
 

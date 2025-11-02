@@ -75,7 +75,7 @@ function Results() {
                     }`}
                   >
                     <div className="font-semibold text-white">
-                      {sheet.student_name || 'Unknown Student'}
+                      {sheet.student_name && sheet.student_name.trim() ? sheet.student_name : 'Unknown Student'}
                     </div>
                     <div className="text-sm text-gray-400 mt-1">
                       {getTemplateName(sheet.template_id)}
@@ -149,7 +149,7 @@ function Results() {
                     <div className="bg-slate-700/50 rounded-lg p-4 space-y-2">
                       <div>
                         <span className="text-gray-400">Name:</span>{' '}
-                        <span className="text-white">{selectedSheet.student_name || 'N/A'}</span>
+                        <span className="text-white">{(selectedSheet.student_name && selectedSheet.student_name.trim()) ? selectedSheet.student_name : 'N/A'}</span>
                       </div>
                       <div>
                         <span className="text-gray-400">Roll Number:</span>{' '}

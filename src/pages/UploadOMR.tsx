@@ -34,7 +34,14 @@ function UploadOMR() {
       setUploading(true);
       setError(null);
       const res = await api.extractNameFromCropped(croppedFile);
-      setExtractedName(res.student_name || null);
+      console.log('Name extraction response:', res);
+      const extractedNameValue = res.student_name && res.student_name.trim() ? res.student_name.trim() : null;
+      setExtractedName(extractedNameValue);
+      
+      if (!extractedNameValue) {
+        console.warn('No name extracted from image');
+        // Don't block the flow, just warn - user can proceed
+      }
       
       // After extracting name, show OMR crop modal only if answer key is selected
       if (selectedAnswerKey) {
@@ -43,6 +50,7 @@ function UploadOMR() {
         setError('Please select an answer key first');
       }
     } catch (err: any) {
+      console.error('Error extracting name:', err);
       setError(err.message || 'Failed to extract name');
       setShowNameCropModal(true); // Re-open modal on error
     } finally {
@@ -59,8 +67,19 @@ function UploadOMR() {
     try {
       setUploading(true);
       setError(null);
-      const omrRes = await api.processCroppedOMRByAnswerKey(selectedAnswerKey, croppedFile, extractedName || undefined);
+      // Pass the extracted name if it exists and is not empty
+      const nameToSend = extractedName && extractedName.trim() ? extractedName.trim() : undefined;
+      console.log('Sending name to backend:', nameToSend);
+      const omrRes = await api.processCroppedOMRByAnswerKey(selectedAnswerKey, croppedFile, nameToSend);
+      console.log('OMR processing response:', omrRes);
       setResult(omrRes);
+      // Update extractedName from response if it comes back
+      if (omrRes.student_name && omrRes.student_name.trim()) {
+        setExtractedName(omrRes.student_name.trim());
+        console.log('Name saved in response:', omrRes.student_name);
+      } else {
+        console.warn('No student_name in response:', omrRes);
+      }
       if (omrRes.image_path) setOmrCropPath(omrRes.image_path);
     } catch (err: any) {
       setError(err.message || 'Failed to process OMR sheet');
