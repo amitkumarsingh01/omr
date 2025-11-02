@@ -1,0 +1,6 @@
+@echo off
+echo Starting OMR Sheet Processor Backend...
+cd backend
+python main.py
+pause
+
