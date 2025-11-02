@@ -47,7 +47,7 @@ function Home() {
           </li>
           <li className="flex items-start">
             <span className="text-orange-500 mr-2">✓</span>
-            <span>Automatic extraction of student details (name, roll number, date)</span>
+            <span>Automatic extraction of student details (name, USN, date)</span>
           </li>
           <li className="flex items-start">
             <span className="text-orange-500 mr-2">✓</span>

@@ -152,7 +152,7 @@ function Results() {
                         <span className="text-white">{(selectedSheet.student_name && selectedSheet.student_name.trim()) ? selectedSheet.student_name : 'N/A'}</span>
                       </div>
                       <div>
-                        <span className="text-gray-400">Roll Number:</span>{' '}
+                        <span className="text-gray-400">USN:</span>{' '}
                         <span className="text-white">{selectedSheet.roll_number || 'N/A'}</span>
                       </div>
                       <div>

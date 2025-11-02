@@ -87,12 +87,18 @@ export const api = {
     }
     return response.json();
   },
-  processCroppedOMRByAnswerKey: async (answerKeyId: number, croppedFile: File, studentName?: string) => {
+  processCroppedOMRByAnswerKey: async (answerKeyId: number, croppedFile: File, studentName?: string, usn?: string, examDate?: string) => {
     const formData = new FormData();
     formData.append('file', croppedFile);
     let url = `${API_BASE_URL}/api/omr-sheets/process-cropped-omr-by-answer-key?answer_key_id=${answerKeyId}`;
     if (studentName) {
       url += `&student_name=${encodeURIComponent(studentName)}`;
+    }
+    if (usn) {
+      url += `&roll_number=${encodeURIComponent(usn)}`;
+    }
+    if (examDate) {
+      url += `&exam_date=${encodeURIComponent(examDate)}`;
     }
     const response = await fetch(url, {
       method: 'POST',

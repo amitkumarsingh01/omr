@@ -208,15 +208,15 @@ Return only valid JSON."""
 
 
 def extract_name_from_image(image_data: bytes) -> Dict[str, Any]:
-    """Extract student's name (and optional roll number) from a cropped image region."""
+    """Extract student's name, USN, and exam date from a cropped image region."""
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY not found in environment variables")
 
     model = genai.GenerativeModel('gemini-2.0-flash')
     prompt = (
-        "Extract ONLY the student's name (and roll number if clearly present) from this cropped exam image. "
-        "Return strict JSON: {\n  \"student_name\": string | null,\n  \"roll_number\": string | null\n}. "
-        "If uncertain, use null."
+        "Extract the student's name, USN (University Seat Number), and exam date from this cropped exam image. "
+        "Return strict JSON: {\n  \"student_name\": string | null,\n  \"roll_number\": string | null (this is USN),\n  \"exam_date\": string | null (format: DD/MM/YYYY or DD-MM-YYYY)\n}. "
+        "If uncertain about any field, use null for that field. Extract date in DD/MM/YYYY or DD-MM-YYYY format if present."
     )
     try:
         img = Image.open(BytesIO(image_data))
@@ -230,9 +230,13 @@ def extract_name_from_image(image_data: bytes) -> Dict[str, Any]:
             s = text.find("```") + 3
             e = text.find("```", s)
             text = text[s:e].strip()
-        return json.loads(text)
+        result = json.loads(text)
+        # Ensure all expected fields exist
+        if "exam_date" not in result:
+            result["exam_date"] = None
+        return result
     except Exception as e:
-        return {"student_name": None, "roll_number": None, "error": str(e)}
+        return {"student_name": None, "roll_number": None, "exam_date": None, "error": str(e)}
 
 
 def process_omr_from_image_data(image_data: bytes, template_answer_key: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

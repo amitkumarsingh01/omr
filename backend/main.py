@@ -327,12 +327,17 @@ async def api_extract_name_from_cropped(
         saved_path = _save_bytes("name_crop", file.filename, image_bytes)
         result = extract_name_from_image(image_bytes)
         result["image_path"] = saved_path
-        logger.info(f"Name extraction result: student_name={result.get('student_name')}, roll_number={result.get('roll_number')}")
+        logger.info(f"Name extraction result: student_name={result.get('student_name')}, roll_number={result.get('roll_number')}, exam_date={result.get('exam_date')}")
         # Ensure we return None instead of empty string
         if result.get("student_name") == "":
             result["student_name"] = None
         if result.get("roll_number") == "":
             result["roll_number"] = None
+        if result.get("exam_date") == "":
+            result["exam_date"] = None
+        # Ensure exam_date field exists
+        if "exam_date" not in result:
+            result["exam_date"] = None
         return result
     except Exception as e:
         logger.error(f"Error extracting name: {str(e)}")
@@ -344,10 +349,12 @@ async def process_cropped_omr_by_answer_key(
     file: UploadFile = File(...),
     answer_key_id: int = Query(...),
     student_name: Optional[str] = Query(None),
+    roll_number: Optional[str] = Query(None),
+    exam_date: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """Process already cropped OMR image - no coordinates needed, image is already cropped."""
-    logger.info(f"Received student_name parameter: '{student_name}' (type: {type(student_name)})")
+    logger.info(f"Received parameters - student_name: '{student_name}', roll_number: '{roll_number}', exam_date: '{exam_date}'")
     # Load answer key
     answer_key = db.query(AnswerKey).filter(AnswerKey.id == answer_key_id).first()
     if not answer_key:
@@ -388,7 +395,7 @@ async def process_cropped_omr_by_answer_key(
 
     percentage = (correct_count / total_questions * 100) if total_questions > 0 else 0
     
-    # Prioritize passed student_name over result, and handle empty strings
+    # Prioritize passed parameters over result, and handle empty strings
     final_student_name = None
     if student_name and isinstance(student_name, str) and student_name.strip():
         final_student_name = student_name.strip()
@@ -399,13 +406,29 @@ async def process_cropped_omr_by_answer_key(
     else:
         logger.warning(f"No valid student_name found (param: '{student_name}', result: '{result.get('student_name')}')")
     
-    logger.info(f"Final student_name to save: '{final_student_name}'")
+    final_roll_number = None
+    if roll_number and isinstance(roll_number, str) and roll_number.strip():
+        final_roll_number = roll_number.strip()
+        logger.info(f"Using roll_number from parameter: '{final_roll_number}'")
+    elif result.get("roll_number") and isinstance(result.get("roll_number"), str) and result.get("roll_number").strip():
+        final_roll_number = result.get("roll_number").strip()
+        logger.info(f"Using roll_number from OMR result: '{final_roll_number}'")
+    
+    final_exam_date = None
+    if exam_date and isinstance(exam_date, str) and exam_date.strip():
+        final_exam_date = exam_date.strip()
+        logger.info(f"Using exam_date from parameter: '{final_exam_date}'")
+    elif result.get("exam_date") and isinstance(result.get("exam_date"), str) and result.get("exam_date").strip():
+        final_exam_date = result.get("exam_date").strip()
+        logger.info(f"Using exam_date from OMR result: '{final_exam_date}'")
+    
+    logger.info(f"Final values to save - student_name: '{final_student_name}', roll_number: '{final_roll_number}', exam_date: '{final_exam_date}'")
     
     db_omr_sheet = OMRSheet(
         template_id=template.id,
         student_name=final_student_name,
-        roll_number=result.get("roll_number"),
-        exam_date=result.get("exam_date"),
+        roll_number=final_roll_number,
+        exam_date=final_exam_date,
         other_details=json.dumps(result.get("other_details", {})),
         responses=json.dumps(responses),
         image_path=cropped_path,
@@ -420,6 +443,10 @@ async def process_cropped_omr_by_answer_key(
 
     db_omr_sheet.responses = json.loads(db_omr_sheet.responses)
     db_omr_sheet.other_details = json.loads(db_omr_sheet.other_details) if db_omr_sheet.other_details else {}
+    
+    # Log the final saved name for debugging
+    logger.info(f"OMR sheet saved with ID {db_omr_sheet.id}, student_name: '{db_omr_sheet.student_name}'")
+    
     return db_omr_sheet
 
 
