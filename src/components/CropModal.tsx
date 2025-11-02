@@ -85,7 +85,32 @@ export function CropModal({
     const naturalWidth = img.naturalWidth;
     const naturalHeight = img.naturalHeight;
     
-    // Create a temporary canvas to rotate the image first
+    // Get the displayed image dimensions (affected by CSS rotation)
+    const imgRect = img.getBoundingClientRect();
+    const displayWidth = imgRect.width;
+    const displayHeight = imgRect.height;
+    
+    // Calculate scale from display to natural size
+    // When rotated 90/270 degrees, dimensions appear swapped visually but bounding rect may not reflect this
+    const isRotated90or270 = Math.abs(rotation % 180) === 90;
+    const effectiveDisplayWidth = isRotated90or270 ? displayHeight : displayWidth;
+    const effectiveDisplayHeight = isRotated90or270 ? displayWidth : displayHeight;
+    
+    const scaleX = naturalWidth / effectiveDisplayWidth;
+    const scaleY = naturalHeight / effectiveDisplayHeight;
+    
+    // Convert crop coordinates from display space to natural image space
+    // These coordinates are relative to the CSS-rotated display
+    let cropX = completedCrop.x;
+    let cropY = completedCrop.y;
+    let cropWidth = completedCrop.width;
+    let cropHeight = completedCrop.height;
+    
+    // Transform coordinates based on rotation
+    // When image is rotated, we need to adjust coordinate mapping
+    const normalizedRotation = ((rotation % 360) + 360) % 360;
+    
+    // First, rotate the image on canvas
     const tempCanvas = document.createElement('canvas');
     const isRotated = rotation % 180 !== 0;
     tempCanvas.width = isRotated ? naturalHeight : naturalWidth;
@@ -100,29 +125,56 @@ export function CropModal({
     tempCtx.translate(centerX, centerY);
     tempCtx.rotate((rotation * Math.PI) / 180);
     tempCtx.translate(-naturalWidth / 2, -naturalHeight / 2);
-    
-    // Draw the rotated image
     tempCtx.drawImage(img, 0, 0);
     
-    // Now crop from the rotated image
-    const imgRect = imgRef.current.getBoundingClientRect();
-    const displayWidth = imgRect.width;
-    const displayHeight = imgRect.height;
+    // Transform crop coordinates based on rotation
+    let finalCropX, finalCropY, finalCropWidth, finalCropHeight;
     
-    // Calculate scale factors for the rotated canvas
-    const scaleX = tempCanvas.width / displayWidth;
-    const scaleY = tempCanvas.height / displayHeight;
+    if (normalizedRotation === 0) {
+      finalCropX = cropX * scaleX;
+      finalCropY = cropY * scaleY;
+      finalCropWidth = cropWidth * scaleX;
+      finalCropHeight = cropHeight * scaleY;
+    } else if (normalizedRotation === 90) {
+      // Rotated 90° clockwise: top becomes right
+      finalCropX = cropY * scaleY;
+      finalCropY = (effectiveDisplayWidth - cropX - cropWidth) * scaleX;
+      finalCropWidth = cropHeight * scaleY;
+      finalCropHeight = cropWidth * scaleX;
+    } else if (normalizedRotation === 180) {
+      // Rotated 180°: flipped
+      finalCropX = (effectiveDisplayWidth - cropX - cropWidth) * scaleX;
+      finalCropY = (effectiveDisplayHeight - cropY - cropHeight) * scaleY;
+      finalCropWidth = cropWidth * scaleX;
+      finalCropHeight = cropHeight * scaleY;
+    } else if (normalizedRotation === 270) {
+      // Rotated 270° (90° CCW): top becomes left
+      finalCropX = (effectiveDisplayHeight - cropY - cropHeight) * scaleY;
+      finalCropY = cropX * scaleX;
+      finalCropWidth = cropHeight * scaleY;
+      finalCropHeight = cropWidth * scaleX;
+    } else {
+      // For other angles, use simpler mapping
+      finalCropX = cropX * scaleX;
+      finalCropY = cropY * scaleY;
+      finalCropWidth = cropWidth * scaleX;
+      finalCropHeight = cropHeight * scaleY;
+    }
     
-    // Convert display pixels to canvas pixels
-    const cropX = completedCrop.x * scaleX;
-    const cropY = completedCrop.y * scaleY;
-    const cropWidth = completedCrop.width * scaleX;
-    const cropHeight = completedCrop.height * scaleY;
+    // Map coordinates to rotated canvas
+    // The tempCanvas already has the rotated image
+    const canvasScaleX = tempCanvas.width / effectiveDisplayWidth;
+    const canvasScaleY = tempCanvas.height / effectiveDisplayHeight;
+    
+    finalCropX = finalCropX * (canvasScaleX / scaleX);
+    finalCropY = finalCropY * (canvasScaleY / scaleY);
+    finalCropWidth = finalCropWidth * (canvasScaleX / scaleX);
+    finalCropHeight = finalCropHeight * (canvasScaleY / scaleY);
     
     // Create final canvas for cropped result
     const canvas = document.createElement('canvas');
-    canvas.width = cropWidth;
-    canvas.height = cropHeight;
+    canvas.width = finalCropWidth;
+    canvas.height = finalCropHeight;
     const ctx = canvas.getContext('2d');
     
     if (!ctx) return null;
@@ -130,8 +182,8 @@ export function CropModal({
     // Draw the cropped portion from rotated image
     ctx.drawImage(
       tempCanvas,
-      cropX, cropY, cropWidth, cropHeight, // Source: crop from rotated image
-      0, 0, cropWidth, cropHeight // Destination: full canvas
+      finalCropX, finalCropY, finalCropWidth, finalCropHeight,
+      0, 0, finalCropWidth, finalCropHeight
     );
     
     // Convert canvas to blob then to file

@@ -14,6 +14,7 @@ function AnswerKeys() {
   const [error, setError] = useState<string | null>(null);
   const [showCropModal, setShowCropModal] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [selectedAnswerKey, setSelectedAnswerKey] = useState<AnswerKey | null>(null);
 
   useEffect(() => {
     loadAnswerKeys();
@@ -127,9 +128,13 @@ function AnswerKeys() {
       ) : (
         <div className="grid md:grid-cols-2 gap-6">
           {answerKeys.map((key) => (
-            <div key={key.id} className="card">
+            <div 
+              key={key.id} 
+              className="card cursor-pointer hover:border-blue-500 transition-colors"
+              onClick={() => setSelectedAnswerKey(key)}
+            >
               <div className="flex justify-between items-start mb-4">
-                <div>
+                <div className="flex-1">
                   <h3 className="text-xl font-semibold text-white mb-2">{key.name}</h3>
                   {key.description && (
                     <p className="text-gray-400 text-sm mb-2">{key.description}</p>
@@ -137,10 +142,14 @@ function AnswerKeys() {
                   <p className="text-gray-400 text-sm">
                     {Object.keys(key.answer_key).length} answers
                   </p>
+                  <p className="text-blue-400 text-sm mt-2">Click to view answers →</p>
                 </div>
                 <button
-                  onClick={() => handleDelete(key.id)}
-                  className="text-red-400 hover:text-red-300"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(key.id);
+                  }}
+                  className="text-red-400 hover:text-red-300 ml-4"
                 >
                   Delete
                 </button>
@@ -246,6 +255,64 @@ function AnswerKeys() {
           onCancel={handleCropCancel}
           uploading={uploading}
         />
+      )}
+
+      {selectedAnswerKey && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedAnswerKey(null)}>
+          <div className="card max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-700">
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-2">{selectedAnswerKey.name}</h2>
+                {selectedAnswerKey.description && (
+                  <p className="text-gray-400">{selectedAnswerKey.description}</p>
+                )}
+              </div>
+              <button
+                onClick={() => setSelectedAnswerKey(null)}
+                className="text-gray-400 hover:text-white text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto">
+              <div className="mb-4 text-sm text-gray-400">
+                Total Questions: {Object.keys(selectedAnswerKey.answer_key).length}
+              </div>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                {Object.entries(selectedAnswerKey.answer_key)
+                  .sort(([a], [b]) => {
+                    // Sort numerically if both are numbers, otherwise alphabetically
+                    const numA = parseInt(a);
+                    const numB = parseInt(b);
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                      return numA - numB;
+                    }
+                    return a.localeCompare(b);
+                  })
+                  .map(([questionNum, answer]) => (
+                    <div
+                      key={questionNum}
+                      className="bg-gray-800 border border-gray-700 rounded-lg p-3 hover:border-blue-500 transition-colors"
+                    >
+                      <div className="text-xs text-gray-400 mb-1">Q{questionNum}</div>
+                      <div className="text-lg font-bold text-blue-400">{answer}</div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-700">
+              <button
+                onClick={() => setSelectedAnswerKey(null)}
+                className="btn-secondary w-full"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
