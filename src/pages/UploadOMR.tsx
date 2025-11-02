@@ -33,11 +33,8 @@ function UploadOMR() {
   // Crop modal states
   const [showNameCropModal, setShowNameCropModal] = useState(false);
   const [showOmrCropModal, setShowOmrCropModal] = useState(false);
-  const [nameRect, setNameRect] = useState<{x:number;y:number;w:number;h:number} | null>(null);
-  const [omrRect, setOmrRect] = useState<{x:number;y:number;w:number;h:number} | null>(null);
   
   const [extractedName, setExtractedName] = useState<string | null>(null);
-  const [nameCropPath, setNameCropPath] = useState<string | null>(null);
   const [omrCropPath, setOmrCropPath] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,7 +52,6 @@ function UploadOMR() {
       setError(null);
       const res = await api.extractNameFromCropped(croppedFile);
       setExtractedName(res.student_name || null);
-      if (res.image_path) setNameCropPath(res.image_path);
       
       // After extracting name, show OMR crop modal only if answer key is selected
       if (selectedAnswerKey) {
@@ -107,10 +103,7 @@ function UploadOMR() {
       setResult(null);
       setError(null);
       setExtractedName(null);
-      setNameCropPath(null);
       setOmrCropPath(null);
-      setNameRect(null);
-      setOmrRect(null);
       const url = URL.createObjectURL(selectedFile);
       setImageUrl(url);
       
