@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { CropModal } from '../components/CropModal';
 import { api } from '../services/api';
 import type { AnswerKey } from '../types/index.ts';
 
@@ -11,6 +12,8 @@ function AnswerKeys() {
   const [description, setDescription] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     loadAnswerKeys();
@@ -29,8 +32,33 @@ function AnswerKeys() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
       setError(null);
+      const url = URL.createObjectURL(selectedFile);
+      setImageUrl(url);
+      setShowCropModal(true);
+    }
+  };
+
+  const handleCropComplete = (croppedFile: File) => {
+    setFile(croppedFile);
+    setShowCropModal(false);
+    if (imageUrl) {
+      URL.revokeObjectURL(imageUrl);
+      setImageUrl(null);
+    }
+  };
+
+  const handleCropCancel = () => {
+    setShowCropModal(false);
+    if (imageUrl) {
+      URL.revokeObjectURL(imageUrl);
+      setImageUrl(null);
+    }
+    // Reset file input
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
     }
   };
 
@@ -173,7 +201,7 @@ function AnswerKeys() {
                 />
                 {file && (
                   <div className="text-sm text-gray-400 mt-2">
-                    Selected: {file.name} ({(file.size / 1024).toFixed(2)} KB)
+                    Cropped image ready: {file.name} ({(file.size / 1024).toFixed(2)} KB)
                   </div>
                 )}
               </div>
@@ -187,6 +215,11 @@ function AnswerKeys() {
                   setName('');
                   setDescription('');
                   setError(null);
+                  if (imageUrl) {
+                    URL.revokeObjectURL(imageUrl);
+                    setImageUrl(null);
+                  }
+                  setShowCropModal(false);
                 }}
                 className="btn-secondary"
               >
@@ -202,6 +235,17 @@ function AnswerKeys() {
             </div>
           </div>
         </div>
+      )}
+
+      {showCropModal && imageUrl && (
+        <CropModal
+          title="Crop Answer Key Image"
+          description="Crop the OMR sheet image to focus on the answer key region. Adjust the crop area and click 'Crop & Continue' when done."
+          imageUrl={imageUrl}
+          onComplete={handleCropComplete}
+          onCancel={handleCropCancel}
+          uploading={uploading}
+        />
       )}
     </div>
   );
