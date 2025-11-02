@@ -101,7 +101,8 @@ function Results() {
                   <h2 className="text-2xl font-semibold text-white">Result Details</h2>
                   <button
                     onClick={() => handleDelete(selectedSheet.id)}
-                    className="text-red-400 hover:text-red-300"
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold"
+                    title="Delete result"
                   >
                     Delete
                   </button>

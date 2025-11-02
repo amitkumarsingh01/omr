@@ -336,6 +336,7 @@ async def api_extract_name_from_cropped(
 async def process_cropped_omr_by_answer_key(
     file: UploadFile = File(...),
     answer_key_id: int = Query(...),
+    student_name: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """Process already cropped OMR image - no coordinates needed, image is already cropped."""
@@ -380,7 +381,7 @@ async def process_cropped_omr_by_answer_key(
     percentage = (correct_count / total_questions * 100) if total_questions > 0 else 0
     db_omr_sheet = OMRSheet(
         template_id=template.id,
-        student_name=result.get("student_name"),
+        student_name=student_name or result.get("student_name"),
         roll_number=result.get("roll_number"),
         exam_date=result.get("exam_date"),
         other_details=json.dumps(result.get("other_details", {})),

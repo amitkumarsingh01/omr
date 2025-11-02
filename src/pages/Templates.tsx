@@ -142,7 +142,8 @@ function Templates() {
                 </div>
                 <button
                   onClick={() => handleDelete(template.id)}
-                  className="text-red-400 hover:text-red-300"
+                  className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-semibold"
+                  title="Delete template"
                 >
                   Delete
                 </button>

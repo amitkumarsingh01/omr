@@ -59,7 +59,7 @@ function UploadOMR() {
     try {
       setUploading(true);
       setError(null);
-      const omrRes = await api.processCroppedOMRByAnswerKey(selectedAnswerKey, croppedFile);
+      const omrRes = await api.processCroppedOMRByAnswerKey(selectedAnswerKey, croppedFile, extractedName || undefined);
       setResult(omrRes);
       if (omrRes.image_path) setOmrCropPath(omrRes.image_path);
     } catch (err: any) {
@@ -68,7 +68,7 @@ function UploadOMR() {
     } finally {
       setUploading(false);
     }
-  }, [selectedAnswerKey]);
+  }, [selectedAnswerKey, extractedName]);
 
   const loadAnswerKeys = async () => {
     try {

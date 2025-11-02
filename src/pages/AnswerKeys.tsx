@@ -149,7 +149,8 @@ function AnswerKeys() {
                     e.stopPropagation();
                     handleDelete(key.id);
                   }}
-                  className="text-red-400 hover:text-red-300 ml-4"
+                  className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-semibold ml-4"
+                  title="Delete answer key"
                 >
                   Delete
                 </button>
@@ -267,12 +268,30 @@ function AnswerKeys() {
                   <p className="text-gray-400">{selectedAnswerKey.description}</p>
                 )}
               </div>
-              <button
-                onClick={() => setSelectedAnswerKey(null)}
-                className="text-gray-400 hover:text-white text-2xl font-bold"
-              >
-                ×
-              </button>
+              <div className="flex gap-2 items-center">
+                <button
+                  onClick={async () => {
+                    if (confirm(`Are you sure you want to delete "${selectedAnswerKey.name}"? This action cannot be undone.`)) {
+                      try {
+                        await api.deleteAnswerKey(selectedAnswerKey.id);
+                        setSelectedAnswerKey(null);
+                        loadAnswerKeys();
+                      } catch (err) {
+                        alert('Failed to delete answer key');
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold text-sm"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => setSelectedAnswerKey(null)}
+                  className="text-gray-400 hover:text-white text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-auto">
