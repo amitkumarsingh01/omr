@@ -32,6 +32,88 @@ function Results() {
     return template?.name || `Template ${templateId}`;
   };
 
+  const exportToCSV = () => {
+    if (omrSheets.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    // Get all question numbers from all sheets to create complete columns
+    const allQuestionNumbers = new Set<string>();
+    omrSheets.forEach(sheet => {
+      Object.keys(sheet.responses || {}).forEach(q => allQuestionNumbers.add(q));
+    });
+    const sortedQuestions = Array.from(allQuestionNumbers).sort((a, b) => {
+      const numA = parseInt(a);
+      const numB = parseInt(b);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
+
+    // Create CSV headers
+    const headers = [
+      'ID',
+      'Student Name',
+      'USN',
+      'Exam Date',
+      'Template',
+      'Total Questions',
+      'Correct',
+      'Wrong',
+      'Unanswered',
+      'Percentage',
+      'Processed Date',
+      ...sortedQuestions.map(q => `Q${q}`)
+    ];
+
+    // Create CSV rows
+    const rows = omrSheets.map(sheet => {
+      const templateName = getTemplateName(sheet.template_id);
+      const unanswered = sheet.total_questions - sheet.correct_count - sheet.wrong_count;
+      
+      const row = [
+        sheet.id.toString(),
+        (sheet.student_name && sheet.student_name.trim()) ? sheet.student_name : 'N/A',
+        sheet.roll_number || 'N/A',
+        sheet.exam_date || 'N/A',
+        templateName,
+        sheet.total_questions.toString(),
+        sheet.correct_count.toString(),
+        sheet.wrong_count.toString(),
+        unanswered.toString(),
+        sheet.percentage || '0%',
+        new Date(sheet.created_at).toLocaleString(),
+        ...sortedQuestions.map(q => sheet.responses?.[q] || '-')
+      ];
+
+      // Escape CSV values (handle commas, quotes, newlines)
+      return row.map(cell => {
+        const str = String(cell || '');
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      });
+    });
+
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `omr-results-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this result?')) return;
     
@@ -52,7 +134,21 @@ function Results() {
 
   return (
     <div>
-      <h1 className="text-4xl font-bold mb-8 text-white">Processed Results</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-4xl font-bold text-white">Processed Results</h1>
+        {omrSheets.length > 0 && (
+          <button
+            onClick={exportToCSV}
+            className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold flex items-center gap-2"
+            title="Export all results to CSV"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+            Export to CSV
+          </button>
+        )}
+      </div>
 
       {omrSheets.length === 0 ? (
         <div className="card text-center text-gray-400">
