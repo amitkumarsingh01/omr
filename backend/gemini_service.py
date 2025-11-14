@@ -43,8 +43,10 @@ def process_omr_sheet(image_path: str, template_answer_key: Optional[Dict[str, A
 
 2. Question Responses:
    - For each question, identify which option (A, B, C, D, etc.) is marked
-   - If multiple options are marked, note it
-   - If no option is marked, note it as unanswered
+   - IMPORTANT RULES for responses:
+     * If a question has a single option selected (A, B, C, D, etc.), return that option letter
+     * If a question has NO option selected (unanswered), return "_"
+     * If a question has MULTIPLE options selected, return "x"
 
 3. Return the result as a JSON object with the following structure:
 {
@@ -56,8 +58,8 @@ def process_omr_sheet(image_path: str, template_answer_key: Optional[Dict[str, A
   },
   "responses": {
     "1": "A",
-    "2": "B",
-    "3": "C",
+    "2": "_",
+    "3": "x",
     ...
   }
 }
@@ -247,8 +249,12 @@ def process_omr_from_image_data(image_data: bytes, template_answer_key: Optional
     model = genai.GenerativeModel('gemini-2.0-flash')
 
     prompt = (
-        "Analyze this cropped OMR region and extract question responses. There are 50 questions 10 in one column and 5 columns This is OMR Sheet so check that grey scaling part all that and give accurate response"
-        "Return strict JSON with 'responses' mapping question numbers to selected options."
+        "Analyze this cropped OMR region and extract question responses. There are 50 questions 10 in one column and 5 columns This is OMR Sheet so check that grey scaling part all that and give accurate response. "
+        "Return strict JSON with 'responses' mapping question numbers to selected options. "
+        "IMPORTANT RULES:\n"
+        "- If a question has a single option selected (A, B, C, D, etc.), return that option letter.\n"
+        "- If a question has NO option selected (unanswered), return \"_\".\n"
+        "- If a question has MULTIPLE options selected, return \"x\"."
     )
     if template_answer_key:
         prompt += f"\n\nTemplate Answer Key (for reference): {json.dumps(template_answer_key)}"
@@ -287,7 +293,11 @@ def process_omr_question_range(image_data: bytes, start_question: int, end_quest
     prompt = (
         f"Analyze this cropped OMR region and extract question responses for questions {start_question} to {end_question} only. "
         "This is an OMR Sheet - check the grey scaling/darkened bubbles carefully for accurate response. "
-        "Return strict JSON with 'responses' mapping question numbers (as strings) to selected options (A, B, C, D, etc.). "
+        "Return strict JSON with 'responses' mapping question numbers (as strings) to selected options. "
+        "IMPORTANT RULES:\n"
+        "- If a question has a single option selected (A, B, C, D, etc.), return that option letter.\n"
+        "- If a question has NO option selected (unanswered), return \"_\".\n"
+        "- If a question has MULTIPLE options selected, return \"x\".\n"
         f"Only include questions {start_question} through {end_question} in your response."
     )
     

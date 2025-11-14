@@ -129,14 +129,29 @@ async def upload_omr_sheet(
         correct_count = 0
         wrong_count = 0
         unanswered_count = 0
+        multiple_selection_count = 0
         
         for question_num, student_answer in responses.items():
             correct_answer = template_answer_key.get(str(question_num))
-            if not student_answer or student_answer.strip() == "":
+            student_answer_str = str(student_answer).strip().upper() if student_answer else ""
+            
+            # Handle special cases
+            if not student_answer_str or student_answer_str == "":
                 unanswered_count += 1
-            elif student_answer.strip().upper() == str(correct_answer).strip().upper():
+                wrong_count += 1
+            elif student_answer_str == "_":
+                # Unanswered question (explicitly marked)
+                unanswered_count += 1
+                wrong_count += 1
+            elif student_answer_str == "X":
+                # Multiple selections (invalid)
+                multiple_selection_count += 1
+                wrong_count += 1
+            elif student_answer_str == str(correct_answer).strip().upper():
+                # Correct answer
                 correct_count += 1
             else:
+                # Wrong answer
                 wrong_count += 1
         
         total_answered = correct_count + wrong_count
@@ -227,14 +242,29 @@ async def upload_omr_sheet_by_answer_key(
         correct_count = 0
         wrong_count = 0
         unanswered_count = 0
+        multiple_selection_count = 0
 
         for question_num, student_answer in responses.items():
             correct_answer = template_answer_key.get(str(question_num))
-            if not student_answer or student_answer.strip() == "":
+            student_answer_str = str(student_answer).strip().upper() if student_answer else ""
+            
+            # Handle special cases
+            if not student_answer_str or student_answer_str == "":
                 unanswered_count += 1
-            elif student_answer.strip().upper() == str(correct_answer).strip().upper():
+                wrong_count += 1
+            elif student_answer_str == "_":
+                # Unanswered question (explicitly marked)
+                unanswered_count += 1
+                wrong_count += 1
+            elif student_answer_str == "X":
+                # Multiple selections (invalid)
+                multiple_selection_count += 1
+                wrong_count += 1
+            elif student_answer_str == str(correct_answer).strip().upper():
+                # Correct answer
                 correct_count += 1
             else:
+                # Wrong answer
                 wrong_count += 1
 
         total_answered = correct_count + wrong_count
@@ -428,11 +458,26 @@ async def process_multiple_omr_crops(
     # Score and persist sheet
     correct_count = 0
     wrong_count = 0
+    unanswered_count = 0
+    multiple_selection_count = 0
     for question_num, student_answer in all_responses.items():
         correct_answer = ak.get(str(question_num))
-        if student_answer and str(student_answer).strip().upper() == str(correct_answer).strip().upper():
+        student_answer_str = str(student_answer).strip().upper() if student_answer else ""
+        
+        # Handle special cases
+        if student_answer_str == "_":
+            # Unanswered question
+            unanswered_count += 1
+            wrong_count += 1
+        elif student_answer_str == "X":
+            # Multiple selections (invalid)
+            multiple_selection_count += 1
+            wrong_count += 1
+        elif student_answer_str == str(correct_answer).strip().upper():
+            # Correct answer
             correct_count += 1
         else:
+            # Wrong answer
             wrong_count += 1
 
     percentage = (correct_count / total_questions * 100) if total_questions > 0 else 0
@@ -522,11 +567,26 @@ async def process_cropped_omr_by_answer_key(
     responses = result.get("responses", {})
     correct_count = 0
     wrong_count = 0
+    unanswered_count = 0
+    multiple_selection_count = 0
     for question_num, student_answer in responses.items():
         correct_answer = ak.get(str(question_num))
-        if student_answer and str(student_answer).strip().upper() == str(correct_answer).strip().upper():
+        student_answer_str = str(student_answer).strip().upper() if student_answer else ""
+        
+        # Handle special cases
+        if student_answer_str == "_":
+            # Unanswered question
+            unanswered_count += 1
+            wrong_count += 1
+        elif student_answer_str == "X":
+            # Multiple selections (invalid)
+            multiple_selection_count += 1
+            wrong_count += 1
+        elif student_answer_str == str(correct_answer).strip().upper():
+            # Correct answer
             correct_count += 1
         else:
+            # Wrong answer
             wrong_count += 1
 
     percentage = (correct_count / total_questions * 100) if total_questions > 0 else 0
@@ -628,11 +688,26 @@ async def process_cropped_by_answer_key(
     responses = result.get("responses", {})
     correct_count = 0
     wrong_count = 0
+    unanswered_count = 0
+    multiple_selection_count = 0
     for question_num, student_answer in responses.items():
         correct_answer = ak.get(str(question_num))
-        if student_answer and str(student_answer).strip().upper() == str(correct_answer).strip().upper():
+        student_answer_str = str(student_answer).strip().upper() if student_answer else ""
+        
+        # Handle special cases
+        if student_answer_str == "_":
+            # Unanswered question
+            unanswered_count += 1
+            wrong_count += 1
+        elif student_answer_str == "X":
+            # Multiple selections (invalid)
+            multiple_selection_count += 1
+            wrong_count += 1
+        elif student_answer_str == str(correct_answer).strip().upper():
+            # Correct answer
             correct_count += 1
         else:
+            # Wrong answer
             wrong_count += 1
 
     percentage = (correct_count / total_questions * 100) if total_questions > 0 else 0
