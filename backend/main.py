@@ -28,6 +28,7 @@ from gemini_service import (
     create_answer_key_from_image,
     extract_name_from_image,
     process_omr_from_image_data,
+    process_omr_question_range,
 )
 
 app = FastAPI(title="OMR Sheet Processor API")
@@ -342,6 +343,141 @@ async def api_extract_name_from_cropped(
     except Exception as e:
         logger.error(f"Error extracting name: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error extracting name: {str(e)}")
+
+
+@app.post("/api/omr-sheets/process-multiple-omr-crops", response_model=OMRSheetResponse)
+async def process_multiple_omr_crops(
+    files: List[UploadFile] = File(...),
+    answer_key_id: int = Query(...),
+    student_name: Optional[str] = Query(None),
+    roll_number: Optional[str] = Query(None),
+    exam_date: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Process multiple cropped OMR images - expects 5 files for question ranges 1-10, 11-20, 21-30, 31-40, 41-50."""
+    logger.info(f"Processing multiple OMR crops - received {len(files)} files")
+    logger.info(f"Received parameters - student_name: '{student_name}', roll_number: '{roll_number}', exam_date: '{exam_date}'")
+    
+    # Load answer key
+    answer_key = db.query(AnswerKey).filter(AnswerKey.id == answer_key_id).first()
+    if not answer_key:
+        raise HTTPException(status_code=404, detail="Answer key not found")
+    ak = json.loads(answer_key.answer_key)
+
+    if len(files) != 5:
+        raise HTTPException(status_code=400, detail="Expected exactly 5 files for question ranges 1-10, 11-20, 21-30, 31-40, 41-50")
+
+    # Define question ranges
+    question_ranges = [
+        (1, 10),
+        (11, 20),
+        (21, 30),
+        (31, 40),
+        (41, 50)
+    ]
+
+    # Read all files first (can only read once)
+    file_data = []
+    for file in files:
+        image_bytes = await file.read()
+        file_data.append((image_bytes, file.filename))
+
+    # Process each crop separately
+    all_responses = {}
+    all_errors = []
+    
+    for idx, (image_bytes, filename) in enumerate(file_data):
+        start_q, end_q = question_ranges[idx]
+        logger.info(f"Processing file {idx + 1}/5 for questions {start_q}-{end_q}")
+        
+        try:
+            result = process_omr_question_range(image_bytes, start_q, end_q, ak)
+            
+            if "error" in result:
+                all_errors.append(f"Questions {start_q}-{end_q}: {result['error']}")
+                logger.error(f"Error processing questions {start_q}-{end_q}: {result['error']}")
+            else:
+                # Merge responses
+                for q_num, answer in result.get("responses", {}).items():
+                    all_responses[q_num] = answer
+                logger.info(f"Successfully processed questions {start_q}-{end_q}: {len(result.get('responses', {}))} responses")
+        except Exception as e:
+            error_msg = f"Questions {start_q}-{end_q}: {str(e)}"
+            all_errors.append(error_msg)
+            logger.error(f"Exception processing questions {start_q}-{end_q}: {str(e)}")
+
+    # Save the first crop as the image path (for reference)
+    first_file_bytes, first_filename = file_data[0]
+    cropped_path = _save_bytes("omr_crop", first_filename, first_file_bytes)
+
+    # Create or reuse template mirror
+    total_questions = len(ak.keys())
+    template_name = f"AK #{answer_key.id}: {answer_key.name}"
+    template = db.query(Template).filter(Template.name == template_name).first()
+    if not template:
+        template = Template(
+            name=template_name,
+            description=answer_key.description,
+            total_questions=total_questions,
+            answer_key=answer_key.answer_key,
+        )
+        db.add(template)
+        db.commit()
+        db.refresh(template)
+
+    # Score and persist sheet
+    correct_count = 0
+    wrong_count = 0
+    for question_num, student_answer in all_responses.items():
+        correct_answer = ak.get(str(question_num))
+        if student_answer and str(student_answer).strip().upper() == str(correct_answer).strip().upper():
+            correct_count += 1
+        else:
+            wrong_count += 1
+
+    percentage = (correct_count / total_questions * 100) if total_questions > 0 else 0
+    
+    # Prioritize passed parameters over result, and handle empty strings
+    final_student_name = None
+    if student_name and isinstance(student_name, str) and student_name.strip():
+        final_student_name = student_name.strip()
+        logger.info(f"Using student_name from parameter: '{final_student_name}'")
+    
+    final_roll_number = None
+    if roll_number and isinstance(roll_number, str) and roll_number.strip():
+        final_roll_number = roll_number.strip()
+        logger.info(f"Using roll_number from parameter: '{final_roll_number}'")
+    
+    final_exam_date = None
+    if exam_date and isinstance(exam_date, str) and exam_date.strip():
+        final_exam_date = exam_date.strip()
+        logger.info(f"Using exam_date from parameter: '{final_exam_date}'")
+    
+    logger.info(f"Final values to save - student_name: '{final_student_name}', roll_number: '{final_roll_number}', exam_date: '{final_exam_date}'")
+    
+    db_omr_sheet = OMRSheet(
+        template_id=template.id,
+        student_name=final_student_name,
+        roll_number=final_roll_number,
+        exam_date=final_exam_date,
+        other_details=json.dumps({"processing_errors": all_errors} if all_errors else {}),
+        responses=json.dumps(all_responses),
+        image_path=cropped_path,
+        correct_count=correct_count,
+        wrong_count=wrong_count,
+        total_questions=total_questions,
+        percentage=f"{percentage:.2f}%"
+    )
+    db.add(db_omr_sheet)
+    db.commit()
+    db.refresh(db_omr_sheet)
+
+    db_omr_sheet.responses = json.loads(db_omr_sheet.responses)
+    db_omr_sheet.other_details = json.loads(db_omr_sheet.other_details) if db_omr_sheet.other_details else {}
+    
+    logger.info(f"OMR sheet saved with ID {db_omr_sheet.id}, student_name: '{db_omr_sheet.student_name}', responses: {len(all_responses)}")
+    
+    return db_omr_sheet
 
 
 @app.post("/api/omr-sheets/process-cropped-omr-by-answer-key", response_model=OMRSheetResponse)

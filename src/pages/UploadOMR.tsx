@@ -16,15 +16,73 @@ function UploadOMR() {
   // Crop modal states
   const [showNameCropModal, setShowNameCropModal] = useState(false);
   const [showOmrCropModal, setShowOmrCropModal] = useState(false);
+  const [currentOmrCropIndex, setCurrentOmrCropIndex] = useState<number>(0); // 0-4 for 5 question ranges
+  const [omrCropFiles, setOmrCropFiles] = useState<File[]>([]); // Store all 5 cropped files
   
   const [extractedName, setExtractedName] = useState<string | null>(null);
   const [extractedUSN, setExtractedUSN] = useState<string | null>(null);
   const [extractedDate, setExtractedDate] = useState<string | null>(null);
   const [omrCropPath, setOmrCropPath] = useState<string | null>(null);
+  
+  // Question ranges for display
+  const questionRanges = [
+    { start: 1, end: 10 },
+    { start: 11, end: 20 },
+    { start: 21, end: 30 },
+    { start: 31, end: 40 },
+    { start: 41, end: 50 }
+  ];
 
   useEffect(() => {
     loadAnswerKeys();
   }, []);
+
+  // Process all 5 crops when they're all collected
+  useEffect(() => {
+    if (omrCropFiles.length === 5 && selectedAnswerKey && !uploading) {
+      const processAllCrops = async () => {
+        try {
+          setUploading(true);
+          setError(null);
+          // Pass the extracted name, USN, and date if they exist and are not empty
+          const nameToSend = extractedName && extractedName.trim() ? extractedName.trim() : undefined;
+          const usnToSend = extractedUSN && extractedUSN.trim() ? extractedUSN.trim() : undefined;
+          const dateToSend = extractedDate && extractedDate.trim() ? extractedDate.trim() : undefined;
+          console.log('Sending 5 crops to backend - Name:', nameToSend, 'USN:', usnToSend, 'Date:', dateToSend);
+          const omrRes = await api.processMultipleOMRCrops(selectedAnswerKey, omrCropFiles, nameToSend, usnToSend, dateToSend);
+          console.log('OMR processing response:', omrRes);
+          setResult(omrRes);
+          // Update extracted values from response if they come back
+          if (omrRes.student_name && omrRes.student_name.trim()) {
+            setExtractedName(omrRes.student_name.trim());
+            console.log('Name saved in response:', omrRes.student_name);
+          }
+          if (omrRes.roll_number && omrRes.roll_number.trim()) {
+            setExtractedUSN(omrRes.roll_number.trim());
+          }
+          if (omrRes.exam_date && omrRes.exam_date.trim()) {
+            setExtractedDate(omrRes.exam_date.trim());
+          }
+          if (omrRes.image_path) setOmrCropPath(omrRes.image_path);
+          
+          // Reset crop state
+          setCurrentOmrCropIndex(0);
+          setOmrCropFiles([]);
+        } catch (err: any) {
+          setError(err.message || 'Failed to process OMR sheet');
+          // Reset and restart cropping on error
+          setCurrentOmrCropIndex(0);
+          setOmrCropFiles([]);
+          setShowOmrCropModal(true);
+        } finally {
+          setUploading(false);
+        }
+      };
+      
+      processAllCrops();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [omrCropFiles.length, selectedAnswerKey]);
 
   // Handle name crop completion - receives cropped image file
   const handleNameCropComplete = useCallback(async (croppedFile: File) => {
@@ -52,6 +110,8 @@ function UploadOMR() {
       
       // After extracting name, show OMR crop modal only if answer key is selected
       if (selectedAnswerKey) {
+        setCurrentOmrCropIndex(0);
+        setOmrCropFiles([]);
         setShowOmrCropModal(true);
       } else {
         setError('Please select an answer key first');
@@ -65,42 +125,26 @@ function UploadOMR() {
     }
   }, [selectedAnswerKey]);
 
-  // Handle OMR crop completion - receives cropped image file
-  const handleOmrCropComplete = useCallback(async (croppedFile: File) => {
+  // Handle OMR crop completion - receives cropped image file for one question range
+  const handleOmrCropComplete = useCallback((croppedFile: File) => {
     if (!croppedFile || !selectedAnswerKey) return;
     
-    setShowOmrCropModal(false);
-    
-    try {
-      setUploading(true);
-      setError(null);
-      // Pass the extracted name, USN, and date if they exist and are not empty
-      const nameToSend = extractedName && extractedName.trim() ? extractedName.trim() : undefined;
-      const usnToSend = extractedUSN && extractedUSN.trim() ? extractedUSN.trim() : undefined;
-      const dateToSend = extractedDate && extractedDate.trim() ? extractedDate.trim() : undefined;
-      console.log('Sending to backend - Name:', nameToSend, 'USN:', usnToSend, 'Date:', dateToSend);
-      const omrRes = await api.processCroppedOMRByAnswerKey(selectedAnswerKey, croppedFile, nameToSend, usnToSend, dateToSend);
-      console.log('OMR processing response:', omrRes);
-      setResult(omrRes);
-      // Update extracted values from response if they come back
-      if (omrRes.student_name && omrRes.student_name.trim()) {
-        setExtractedName(omrRes.student_name.trim());
-        console.log('Name saved in response:', omrRes.student_name);
+    // Store this cropped file
+    setOmrCropFiles((prevFiles) => {
+      const newCropFiles = [...prevFiles, croppedFile];
+      
+      // Check if we've collected all 5 crops
+      if (newCropFiles.length === 5) {
+        // All 5 crops collected, close modal (processing will happen in useEffect)
+        setShowOmrCropModal(false);
+        return newCropFiles;
+      } else {
+        // Move to next crop
+        setCurrentOmrCropIndex(newCropFiles.length);
+        return newCropFiles;
       }
-      if (omrRes.roll_number && omrRes.roll_number.trim()) {
-        setExtractedUSN(omrRes.roll_number.trim());
-      }
-      if (omrRes.exam_date && omrRes.exam_date.trim()) {
-        setExtractedDate(omrRes.exam_date.trim());
-      }
-      if (omrRes.image_path) setOmrCropPath(omrRes.image_path);
-    } catch (err: any) {
-      setError(err.message || 'Failed to process OMR sheet');
-      setShowOmrCropModal(true); // Re-open modal on error
-    } finally {
-      setUploading(false);
-    }
-  }, [selectedAnswerKey, extractedName, extractedUSN, extractedDate]);
+    });
+  }, [selectedAnswerKey]);
 
   const loadAnswerKeys = async () => {
     try {
@@ -121,6 +165,8 @@ function UploadOMR() {
       setExtractedUSN(null);
       setExtractedDate(null);
       setOmrCropPath(null);
+      setCurrentOmrCropIndex(0);
+      setOmrCropFiles([]);
       const url = URL.createObjectURL(selectedFile);
       setImageUrl(url);
       
@@ -224,12 +270,14 @@ function UploadOMR() {
       {/* OMR Crop Modal */}
       {showOmrCropModal && imageUrl && selectedAnswerKey && (
         <CropModal
-          title="Select OMR Answers Area"
-          description="Drag and resize the orange box to select the area containing the OMR answer bubbles."
+          title={`Select OMR Answers Area - Questions ${questionRanges[currentOmrCropIndex].start}-${questionRanges[currentOmrCropIndex].end} (${currentOmrCropIndex + 1}/5)`}
+          description={`Drag and resize the orange box to select the area containing questions ${questionRanges[currentOmrCropIndex].start} to ${questionRanges[currentOmrCropIndex].end}.`}
           imageUrl={imageUrl}
           onComplete={handleOmrCropComplete}
           onCancel={() => {
             setShowOmrCropModal(false);
+            setCurrentOmrCropIndex(0);
+            setOmrCropFiles([]);
           }}
           uploading={uploading}
         />

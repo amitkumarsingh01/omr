@@ -110,6 +110,32 @@ export const api = {
     }
     return response.json();
   },
+  processMultipleOMRCrops: async (answerKeyId: number, croppedFiles: File[], studentName?: string, usn?: string, examDate?: string) => {
+    const formData = new FormData();
+    // Append all 5 files
+    croppedFiles.forEach((file) => {
+      formData.append('files', file);
+    });
+    let url = `${API_BASE_URL}/api/omr-sheets/process-multiple-omr-crops?answer_key_id=${answerKeyId}`;
+    if (studentName) {
+      url += `&student_name=${encodeURIComponent(studentName)}`;
+    }
+    if (usn) {
+      url += `&roll_number=${encodeURIComponent(usn)}`;
+    }
+    if (examDate) {
+      url += `&exam_date=${encodeURIComponent(examDate)}`;
+    }
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Processing failed' }));
+      throw new Error(error.detail || 'Processing failed');
+    }
+    return response.json();
+  },
   getOMRSheets: () => fetch(`${API_BASE_URL}/api/omr-sheets`).then(res => res.json()),
   getOMRSheet: (id: number) => fetch(`${API_BASE_URL}/api/omr-sheets/${id}`).then(res => res.json()),
   deleteOMRSheet: (id: number) => 

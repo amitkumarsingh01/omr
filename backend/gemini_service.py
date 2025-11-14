@@ -268,3 +268,56 @@ def process_omr_from_image_data(image_data: bytes, template_answer_key: Optional
         return json.loads(text)
     except Exception as e:
         return {"responses": {}, "error": str(e)}
+
+
+def process_omr_question_range(image_data: bytes, start_question: int, end_question: int, template_answer_key: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Process a specific range of questions from a cropped OMR image."""
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY not found in environment variables")
+
+    model = genai.GenerativeModel('gemini-2.0-flash')
+
+    # Extract relevant answer key subset for this range
+    relevant_answer_key = {}
+    if template_answer_key:
+        for q in range(start_question, end_question + 1):
+            if str(q) in template_answer_key:
+                relevant_answer_key[str(q)] = template_answer_key[str(q)]
+
+    prompt = (
+        f"Analyze this cropped OMR region and extract question responses for questions {start_question} to {end_question} only. "
+        "This is an OMR Sheet - check the grey scaling/darkened bubbles carefully for accurate response. "
+        "Return strict JSON with 'responses' mapping question numbers (as strings) to selected options (A, B, C, D, etc.). "
+        f"Only include questions {start_question} through {end_question} in your response."
+    )
+    
+    if relevant_answer_key:
+        prompt += f"\n\nRelevant Answer Key for questions {start_question}-{end_question} (for reference): {json.dumps(relevant_answer_key)}"
+
+    try:
+        img = Image.open(BytesIO(image_data))
+        response = model.generate_content([prompt, img])
+        text = response.text.strip()
+        if "```json" in text:
+            s = text.find("```json") + 7
+            e = text.find("```", s)
+            text = text[s:e].strip()
+        elif "```" in text:
+            s = text.find("```") + 3
+            e = text.find("```", s)
+            text = text[s:e].strip()
+        result = json.loads(text)
+        # Filter to only include questions in the specified range
+        filtered_responses = {}
+        for q_num, answer in result.get("responses", {}).items():
+            try:
+                q_int = int(q_num)
+                if start_question <= q_int <= end_question:
+                    filtered_responses[q_num] = answer
+            except ValueError:
+                pass
+        result["responses"] = filtered_responses
+        return result
+    except Exception as e:
+        logger.error(f"Error processing question range {start_question}-{end_question}: {str(e)}")
+        return {"responses": {}, "error": str(e)}
